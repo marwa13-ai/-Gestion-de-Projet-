@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des entrées et sorties</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core/locales/fr.global.min.js"></script>
+    <style>
+        /* Custom styles for the fixed sidebar and main content spacing */
+        body { margin: 0; font-family: 'Inter', sans-serif; }
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        #main-content { transition: margin-left 0.3s ease-in-out; }
+        .fc { font-size: 0.9rem; }
+        .fc .fc-toolbar-title { font-size: 1.5em; }
+        .fc-event { border-radius: 8px; padding: 4px 8px; }
+        .fc-event-main { font-weight: 500; }
+        .fc-daygrid-event { white-space: normal; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'indigo': { 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' },
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100">
+
+    <div id="app" class="flex h-screen overflow-hidden">
+        </div>
+
+    <div id="modal-container">
+        <div id="add-collaborator-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg">
+                <h2 class="text-xl font-bold mb-6 text-gray-900">Ajouter un nouveau Collaborateur</h2>
+                <form id="add-collaborator-form">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" name="firstName" placeholder="Prénom" class="p-3 border rounded-lg" required />
+                        <input type="text" name="lastName" placeholder="Nom" class="p-3 border rounded-lg" required />
+                        <input type="email" name="email" placeholder="Email" class="p-3 border rounded-lg col-span-2" required />
+                        <input type="text" name="department" placeholder="Département" class="p-3 border rounded-lg" required />
+                        <select name="role" class="p-3 border rounded-lg">
+                            <option value="Collaborateur">Collaborateur</option>
+                            <option value="Administrateur">Administrateur</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Mot de passe par défaut: password</p>
+
+                    <div class="flex justify-end space-x-4 mt-6">
+                        <button type="button" onclick="closeModal('add-collaborator-modal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">
+                            Annuler
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150">
+                            Ajouter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="add-planning-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg">
+                <h2 class="text-xl font-bold mb-6 text-gray-900">Ajouter un Créneau de Planning</h2>
+                <form id="add-planning-form">
+                    <div class="space-y-4">
+                        <select id="planning-user-select" name="userId" class="p-3 border rounded-lg w-full" required>
+                            <option value="" disabled selected>Sélectionner un collaborateur</option>
+                            </select>
+                        <select name="type" class="p-3 border rounded-lg w-full" required>
+                            <option value="Travail">Travail</option>
+                            <option value="Télétravail">Télétravail</option>
+                            <option value="Formation">Formation</option>
+                        </select>
+                        <label class="block text-sm font-medium text-gray-700">Début</label>
+                        <input type="datetime-local" name="start" class="p-3 border rounded-lg w-full" required />
+                        <label class="block text-sm font-medium text-gray-700">Fin</label>
+                        <input type="datetime-local" name="end" class="p-3 border rounded-lg w-full" required />
+                    </div>
+
+                    <div class="flex justify-end space-x-4 mt-6">
+                        <button type="button" onclick="closeModal('add-planning-modal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">
+                            Annuler
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150">
+                            Ajouter
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="new-absence-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg">
+                <h2 class="text-xl font-bold mb-6 text-gray-900">Soumettre une Demande d'Absence</h2>
+                <form id="new-absence-form">
+                    <div class="space-y-4">
+                        <select name="type" class="p-3 border rounded-lg w-full" required>
+                            <option value="Congés Payés">Congés Payés</option>
+                            <option value="Maladie">Maladie</option>
+                            <option value="Télétravail">Télétravail</option>
+                            <option value="Formation">Formation</option>
+                        </select>
+                        <label class="block text-sm font-medium text-gray-700">Date de début</label>
+                        <input type="date" name="start" class="p-3 border rounded-lg w-full" required />
+                        <label class="block text-sm font-medium text-gray-700">Date de fin</label>
+                        <input type="date" name="end" class="p-3 border rounded-lg w-full" required />
+                        <textarea name="reason" placeholder="Raison (optionnel)" class="p-3 border rounded-lg w-full resize-none" rows="3"></textarea>
+                    </div>
+
+                    <div class="flex justify-end space-x-4 mt-6">
+                        <button type="button" onclick="closeModal('new-absence-modal')" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">
+                            Annuler
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-150">
+                            Soumettre
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- GLOBAL DATA AND INITIALIZATION ---
+
+        // Initial data (to be stored in localStorage)
+        const initialUsers = [
+            { id: 'u1', email: 'marwa@corp.com', password: 'password', role: 'Administrateur', department: 'Direction', firstName: 'Marwa', lastName: 'Admin' },
+            { id: 'u2', email: 'rim@corp.com', password: 'password', role: 'Collaborateur', department: 'Développement', firstName: 'Rim', lastName: 'Dev' },
+            { id: 'u3', email: 'firdawss@corp.com', password: 'password', role: 'Collaborateur', department: 'Marketing', firstName: 'Firdawss', lastName: 'Marketing' },
+            { id: 'u4', email: 'fati@corp.com', password: 'password', role: 'Collaborateur', department: 'Finance', firstName: 'Fati', lastName: 'Finance' },
+            { id: 'u5', email: 'ikram@corp.com', password: 'password', role: 'Collaborateur', department: 'RH', firstName: 'Ikram', lastName: 'RH' },
+            { id: 'u6', email: 'hind@corp.com', password: 'password', role: 'Collaborateur', department: 'Support', firstName: 'Hind', lastName: 'Support' },
+        ];
+
+        let initialAbsences = [
+            { id: 'a1', userId: 'u2', userName: 'Rim (Développement)', type: 'Formation', start: new Date(2025, 11, 1), end: new Date(2025, 11, 3), status: 'Refusé', reason: 'Trop de charge ce mois-ci' },
+            { id: 'a2', userId: 'u6', userName: 'Hind (Support)', type: 'Maladie', start: new Date(2025, 10, 25), end: new Date(2025, 10, 25), status: 'Approuvé', reason: 'Grippe' },
+            { id: 'a3', userId: 'u3', userName: 'Firdawss (Marketing)', type: 'Congés Payés', start: new Date(2025, 11, 10), end: new Date(2025, 11, 14), status: 'En attente', reason: 'Vacances de Noël' },
+            { id: 'a4', userId: 'u5', userName: 'Ikram (RH)', type: 'Congés Payés', start: new Date(2025, 11, 20), end: new Date(2025, 11, 24), status: 'En attente', reason: 'Vacances familiales' },
+            { id: 'a5', userId: 'u4', userName: 'Fati (Finance)', type: 'Télétravail', start: new Date(2025, 11, 5), end: new Date(2025, 11, 5), status: 'Approuvé', reason: 'Travaux à domicile' },
+        ];
+
+        let initialPlanning = [
+            { id: 'p1', userId: 'u1', title: 'Travail | Marwa A.', start: '2025-12-03T09:00:00', end: '2025-12-03T17:00:00', allDay: false, department: 'Direction', type: 'Travail' },
+            { id: 'p2', userId: 'u2', title: 'Télétravail | Rim D.', start: '2025-12-04T09:00:00', end: '2025-12-04T17:00:00', allDay: false, department: 'Développement', type: 'Télétravail' },
+            { id: 'p3', userId: 'u3', title: 'Formation | Firdawss M.', start: '2025-12-05T10:00:00', end: '2025-12-05T16:00:00', allDay: false, department: 'Marketing', type: 'Formation' },
+            { id: 'p4', userId: 'u6', title: 'Travail | Hind S.', start: '2025-12-06T08:00:00', end: '2025-12-06T16:00:00', allDay: false, department: 'Support', type: 'Travail' },
+        ];
+
+        let currentUser = null;
+        let currentView = 'Dashboard';
+
+        // --- LOCAL STORAGE UTILITIES ---
+
+        const loadData = (key, defaultValue) => {
+            const stored = localStorage.getItem(key);
+            if (!stored) {
+                localStorage.setItem(key, JSON.stringify(defaultValue));
+                return defaultValue;
+            }
+            return JSON.parse(stored);
+        };
+
+        const saveData = (key, data) => {
+            localStorage.setItem(key, JSON.stringify(data));
+        };
+
+        const getUsers = () => loadData('users', initialUsers);
+        const getAbsences = () => loadData('absences', initialAbsences);
+        const getPlanning = () => loadData('planning', initialPlanning);
+
+        // --- FUNCTION TO RESET DATA ---
+        const resetData = () => {
+            // Clear all localStorage data
+            localStorage.clear();
+            
+            // Force reload the page to use new initial data
+            alert('Données réinitialisées ! La page va se recharger.');
+            location.reload();
+        };
+
+        // --- UI UTILITIES ---
+
+        const generateInitials = (firstName, lastName) => {
+            if (!firstName || !lastName) return '??';
+            return `${firstName[0]}${lastName[0]}`.toUpperCase();
+        };
+
+        const getStatusColor = (status) => {
+            switch (status) {
+                case 'Approuvé': return 'bg-green-100 text-green-800 border border-green-300';
+                case 'Refusé': return 'bg-red-100 text-red-800 border border-red-300';
+                case 'En attente':
+                default: return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+            }
+        };
+
+        const getEventColor = (type) => {
+            switch (type) {
+                case 'Congés Payés': return '#dc2626'; // Red-600
+                case 'Maladie': return '#ca8a04'; // Yellow-600
+                case 'Formation': return '#16a34a'; // Green-600
+                case 'Télétravail': return '#2563eb'; // Blue-600
+                case 'Travail':
+                default: return '#3730a3'; // Indigo-800
+            }
+        };
+
+        const formatDateRange = (start, end) => {
+            const s = moment(start).format('DD-MM-YYYY');
+            const e = moment(end).format('DD-MM-YYYY');
+            return `${s} au ${e}`;
+        };
+
+        const closeModal = (id) => {
+            document.getElementById(id).classList.add('hidden');
+        };
+
+        const openModal = (id) => {
+            document.getElementById(id).classList.remove('hidden');
+        };
+
+        // --- AUTHENTICATION ---
+
+        const renderLoginPage = () => {
+            const app = document.getElementById('app');
+            app.className = "min-h-screen flex items-center justify-center bg-gray-100 p-4";
+            app.innerHTML = `
+                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm">
+                    <div class="flex justify-center mb-6">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-gray-800 text-center mb-2">
+                        Connexion à Gestion des entrées et sorties
+                    </h1>
+                    <p class="text-center text-sm text-gray-500 mb-6">
+                        Veuillez entrer vos identifiants.
+                    </p>
+
+                    <form id="login-form">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1" for="email">Adresse Email</label>
+                            <input type="email" id="login-email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" required placeholder="Entrez votre email" />
+                        </div>
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-1" for="password">Mot de passe</label>
+                            <input type="password" id="login-password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150" required placeholder="Entrez votre mot de passe" />
+                        </div>
+
+                        <p id="login-error" class="text-sm text-red-500 mb-4 text-center hidden"></p>
+
+                        <button type="submit" class="w-full flex items-center justify-center px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-150 font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                            Se connecter
+                        </button>
+                    </form>
+
+                    <div class="mt-8 text-center text-xs text-gray-500">
+                        <p>
+                            Testez avec : <span class="font-semibold">marwa@corp.com</span> (admin) ou <span class="font-semibold">rim@corp.com</span>
+                        </p>
+                        <p class="mt-1">Mot de passe: <span class="font-semibold">password</span></p>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-gray-200">
+                        <button
+                            onclick="resetData()"
+                            class="w-full flex items-center justify-center px-4 py-2 text-red-600 bg-red-100 rounded-lg hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-150 font-medium"
+                            title="Réinitialiser toutes les données (utile après modification du code)"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Réinitialiser les données
+                        </button>
+                        <p class="text-xs text-gray-500 mt-2 text-center">
+                            Cliquez ici si vous avez modifié le code HTML et que les anciennes données persistent
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+        };
+
+        const handleLogin = (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorElement = document.getElementById('login-error');
+
+            const users = getUsers();
+            const user = users.find(u => u.email === email && u.password === password);
+
+            if (user) {
+                currentUser = user;
+                saveData('currentUser', user);
+                errorElement.classList.add('hidden');
+                renderMainLayout();
+            } else {
+                errorElement.textContent = 'Identifiants incorrects.';
+                errorElement.classList.remove('hidden');
+            }
+        };
+
+        const handleLogout = () => {
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            renderLoginPage();
+        };
+
+        // --- LAYOUT AND NAVIGATION ---
+
+        const renderMainLayout = () => {
+            const app = document.getElementById('app');
+            app.className = "flex h-screen overflow-hidden";
+            app.innerHTML = `
+                <div id="sidebar" class="w-64 bg-gray-800 text-white flex flex-col h-full fixed top-0 left-0 bottom-0"></div>
+                <main id="main-content" class="flex-grow ml-64 overflow-y-auto w-full"></main>
+            `;
+            renderSidebar();
+            renderView(currentView);
+        };
+
+        const renderSidebar = () => {
+            const sidebar = document.getElementById('sidebar');
+            if (!sidebar) return;
+
+            const navItems = [
+                { name: 'Dashboard', icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l-2 2m0 0l-7 7m7-7V10a1 1 0 00-1-1h-3m-6 3h.01M9 16h6" /></svg>' },
+                { name: 'Collaborateurs', icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>' },
+                { name: 'Planning', icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>' },
+                // CORRECTION ICI : "Absences" au lieu de "Demandes d'Absence" pour éviter le bug de l'apostrophe
+                { name: 'Absences', icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>' },
+            ];
+
+            const navHtml = navItems.map(item => `
+                <button
+                    onclick="renderView('${item.name}')"
+                    class="flex items-center w-full p-3 rounded-xl transition duration-150 ${
+                        currentView === item.name
+                            ? 'bg-indigo-600 shadow-lg text-white font-semibold'
+                            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }"
+                >
+                    ${item.icon}
+                    <span class="ml-3">${item.name}</span>
+                </button>
+            `).join('');
+
+            sidebar.innerHTML = `
+                <div class="p-6 text-xl font-bold text-indigo-400 border-b border-gray-700">
+                    Gestion des entrées et sorties
+                </div>
+                <nav class="flex-grow p-4 space-y-2">
+                    ${navHtml}
+                </nav>
+                <div class="p-4 border-t border-gray-700">
+                    <div class="text-sm text-gray-400 mb-3">
+                        Connecté en tant que: <span class="font-semibold text-white">${currentUser.firstName} ${currentUser.lastName}</span>
+                    </div>
+                    <button
+                        class="flex items-center w-full p-3 rounded-xl text-red-400 bg-red-800 hover:bg-red-700 transition duration-150"
+                        onclick="handleLogout()"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span class="ml-3">Déconnexion</span>
+                    </button>
+                </div>
+            `;
+        };
+
+        // --- VIEW RENDERING LOGIC ---
+
+        const renderView = (viewName) => {
+            currentView = viewName;
+            renderSidebar();
+            const content = document.getElementById('main-content');
+            content.scrollTop = 0; // Scroll to top on view change
+
+            switch (viewName) {
+                case 'Dashboard':
+                    content.innerHTML = renderDashboardView();
+                    break;
+                case 'Collaborateurs':
+                    content.innerHTML = renderCollaborateursView();
+                    document.getElementById('add-collaborator-form').addEventListener('submit', handleAddCollaborator);
+                    break;
+                case 'Planning':
+                    content.innerHTML = renderPlanningView();
+                    initCalendar();
+                    // Fill and attach event for the planning modal
+                    fillPlanningUserSelect();
+                    document.getElementById('add-planning-form').addEventListener('submit', handleAddPlanning);
+                    break;
+                // CORRECTION ICI : Correspondance avec le nouveau nom "Absences"
+                case 'Absences':
+                    content.innerHTML = renderDemandesAbsenceView();
+                    document.getElementById('new-absence-form').addEventListener('submit', handleSubmitRequest);
+                    
+                    // Si l'utilisateur n'est PAS un Administrateur (donc c'est un collaborateur),
+                    // on ouvre directement le formulaire de demande.
+                    if (currentUser && currentUser.role !== 'Administrateur') {
+                        openModal('new-absence-modal');
+                    }
+                    
+                    break;
+            }
+        };
+
+        // --- DASHBOARD VIEW ---
+
+        const renderDashboardView = () => {
+            const users = getUsers();
+            const absences = getAbsences();
+            const planning = getPlanning();
+            const isAdmin = currentUser.role === 'Administrateur';
+
+            // Stats calculation
+            const totalCollaborators = users.length;
+            const approvedAbsences = absences.filter(a => a.status === 'Approuvé').length;
+            const pendingRequests = absences.filter(a => a.status === 'En attente').length;
+            const todayPlanningCount = planning.filter(event =>
+                moment(event.start).isSameOrBefore(moment(), 'day') &&
+                moment(event.end).isSameOrAfter(moment(), 'day')
+            ).length;
+
+            const statsCards = [
+                { title: 'Total Collaborateurs', value: totalCollaborators, icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>', color: 'bg-indigo-100' },
+                { title: 'Absences Approuvées', value: approvedAbsences, icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>', color: 'bg-red-100' },
+                { title: 'Demandes à Valider', value: pendingRequests, icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>', color: 'bg-yellow-100' },
+                { title: 'Planning du Jour', value: todayPlanningCount, icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>', color: 'bg-green-100' },
+            ];
+
+            const recentActivities = absences
+                .sort((a, b) => new Date(b.id.slice(1)) - new Date(a.id.slice(1)))
+                .slice(0, 5);
+
+            const activitiesHtml = recentActivities.length > 0 ? recentActivities.map(activity => `
+                <li class="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0">
+                    <span class="text-gray-700">${activity.userName} a demandé une absence (${activity.type}) du ${formatDateRange(activity.start, activity.end)}.</span>
+                    <span class="px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(activity.status)}">
+                        ${activity.status}
+                    </span>
+                </li>
+            `).join('') : '<p class="text-gray-500 italic">Aucune activité récente.</p>';
+
+            // Message de bienvenue personnalisé
+            const welcomeMessage = currentUser.firstName === 'Marwa' 
+                ? `Bienvenue Marwa ! Vous êtes connectée en tant qu'administratrice.`
+                : `Bienvenue, ${currentUser.firstName} ${currentUser.lastName} !`;
+
+            return `
+                <div class="p-8 bg-gray-50 min-h-full">
+                    <h1 class="text-3xl font-bold text-gray-900 mb-6">
+                        ${welcomeMessage}
+                    </h1>
+                    <p class="text-gray-600 mb-8">
+                        Gestion complète des ressources humaines et des plannings d'équipe.
+                    </p>
+
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Statistiques Rapides</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        ${statsCards.map(card => `
+                            <div class="bg-white p-6 rounded-xl shadow-md flex items-center justify-between transition duration-300 hover:shadow-lg">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-500">${card.title}</p>
+                                    <p class="text-3xl font-bold text-gray-900 mt-1">${card.value}</p>
+                                </div>
+                                <div class="p-3 rounded-full ${card.color}">
+                                    ${card.icon}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    ${isAdmin ? `
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Dernières Activités</h2>
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <ul class="space-y-4">
+                            ${activitiesHtml}
+                        </ul>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        };
+
+        // --- COLLABORATEURS VIEW ---
+
+        const renderCollaborateursView = () => {
+            const users = getUsers();
+            const isAdmin = currentUser.role === 'Administrateur';
+
+            const usersHtml = users.map(user => `
+                <div class="bg-white p-5 rounded-xl shadow-md flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold rounded-full mr-4">
+                            ${generateInitials(user.firstName, user.lastName)}
+                        </div>
+                        <div>
+                            <p class="font-semibold text-gray-900">${user.firstName} ${user.lastName}</p>
+                            <p class="text-sm text-gray-500">${user.role} | ${user.department}</p>
+                        </div>
+                    </div>
+                    <button class="px-3 py-1 text-sm bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150">
+                        Voir Profil
+                    </button>
+                </div>
+            `).join('');
+
+            return `
+                <div class="p-8 bg-gray-50 min-h-full">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-900">Gestion des Profils Collaborateurs</h1>
+                        ${isAdmin ? `
+                            <button
+                                onclick="openModal('add-collaborator-modal')"
+                                class="flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-xl shadow-md hover:bg-indigo-700 transition duration-150"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                                </svg>
+                                Ajouter un collaborateur
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${usersHtml}
+                    </div>
+                </div>
+            `;
+        };
+
+        const handleAddCollaborator = (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const newUserData = {
+                id: 'u' + Date.now(),
+                firstName: form.firstName.value,
+                lastName: form.lastName.value,
+                email: form.email.value,
+                role: form.role.value,
+                department: form.department.value,
+                password: 'password',
+            };
+
+            const users = getUsers();
+            saveData('users', [...users, newUserData]);
+            closeModal('add-collaborator-modal');
+            renderView('Collaborateurs'); // Re-render to show new user
+        };
+
+        // --- PLANNING VIEW ---
+
+        let calendarInstance = null; // Store the FullCalendar instance
+
+        const getPlanningEvents = () => {
+            const users = getUsers();
+            const absences = getAbsences();
+            const planning = getPlanning();
+
+            const absenceEvents = absences
+                .filter(a => a.status === 'Approuvé')
+                .map(a => {
+                    const user = users.find(u => u.id === a.userId);
+                    return {
+                        id: a.id,
+                        title: `${a.type} | ${user?.firstName[0] || '?'}. ${user?.lastName || '??'}`,
+                        start: moment(a.start).startOf('day').toDate(),
+                        end: moment(a.end).endOf('day').add(1, 'day').toDate(), // FullCalendar end date is exclusive
+                        allDay: true,
+                        backgroundColor: getEventColor(a.type),
+                        borderColor: getEventColor(a.type),
+                    };
+                });
+
+            const workEvents = planning.map(p => {
+                const user = users.find(u => u.id === p.userId);
+                 return {
+                    id: p.id,
+                    title: `${p.type} | ${user?.firstName[0] || '?'}. ${user?.lastName || '??'}`,
+                    start: p.start,
+                    end: p.end,
+                    allDay: false,
+                    backgroundColor: getEventColor(p.type),
+                    borderColor: getEventColor(p.type),
+                }
+            });
+
+            return [...workEvents, ...absenceEvents];
+        };
+
+        const initCalendar = () => {
+            const calendarEl = document.getElementById('calendar');
+            if (!calendarEl) return;
+
+            const events = getPlanningEvents();
+            
+            calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'fr',
+                timeZone: 'Europe/Paris',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,listWeek'
+                },
+                events: events,
+                initialDate: new Date(2025, 11, 1), // Default to Dec 2025
+                height: 'auto', // Use auto height to fit container
+                contentHeight: 'auto',
+                aspectRatio: 1.8, // Adjust aspect ratio for better look
+                eventColor: '#3730a3', // Default color for work
+                eventClick: function(info) {
+                    alert(`Événement: ${info.event.title}\nDébut: ${moment(info.event.start).format('DD/MM/YYYY HH:mm')}\nFin: ${moment(info.event.end).format('DD/MM/YYYY HH:mm')}`);
+                }
+            });
+
+            calendarInstance.render();
+        };
+
+        const fillPlanningUserSelect = () => {
+            const select = document.getElementById('planning-user-select');
+            if (!select) return;
+
+            const users = getUsers();
+            select.innerHTML = '<option value="" disabled selected>Sélectionner un collaborateur</option>';
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = `${user.firstName} ${user.lastName} (${user.department})`;
+                select.appendChild(option);
+            });
+            // Set default dates for the modal
+            const startInput = document.querySelector('#add-planning-form input[name="start"]');
+            const endInput = document.querySelector('#add-planning-form input[name="end"]');
+            if (startInput && endInput) {
+                const now = moment().format('YYYY-MM-DDTHH:mm');
+                const eightHoursLater = moment().add(8, 'hours').format('YYYY-MM-DDTHH:mm');
+                startInput.value = now;
+                endInput.value = eightHoursLater;
+            }
+        };
+
+        const handleAddPlanning = (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const userId = form.userId.value;
+            const type = form.type.value;
+            const start = form.start.value;
+            const end = form.end.value;
+
+            const users = getUsers();
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+
+            const newEvent = {
+                id: 'p' + Date.now(),
+                userId: userId,
+                title: `${type} | ${user.firstName[0]}. ${user.lastName}`,
+                start: start,
+                end: end,
+                allDay: false,
+                department: user.department,
+                type: type,
+            };
+
+            const planning = getPlanning();
+            saveData('planning', [...planning, newEvent]);
+            
+            if (calendarInstance) {
+                // Add event to FullCalendar instance immediately
+                calendarInstance.addEvent({
+                    id: newEvent.id,
+                    title: newEvent.title,
+                    start: newEvent.start,
+                    end: newEvent.end,
+                    allDay: newEvent.allDay,
+                    backgroundColor: getEventColor(newEvent.type),
+                    borderColor: getEventColor(newEvent.type),
+                });
+            }
+
+            closeModal('add-planning-modal');
+            form.reset();
+        };
+
+        const renderPlanningView = () => {
+            const isAdmin = currentUser.role === 'Administrateur';
+
+            return `
+                <div class="p-8 bg-gray-50 min-h-full">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-900">Planning de l'Équipe</h1>
+                        ${isAdmin ? `
+                            <button
+                                onclick="openModal('add-planning-modal')"
+                                class="flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-xl shadow-md hover:bg-indigo-700 transition duration-150"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                                </svg>
+                                Ajouter un Créneau
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-md" style="height: 70vh;">
+                        <div id="calendar" class="h-full"></div>
+                    </div>
+                </div>
+            `;
+        };
+
+        // --- DEMANDES D'ABSENCE VIEW ---
+
+        const handleValidation = (id, status) => {
+            let absences = getAbsences();
+            absences = absences.map(a =>
+                a.id === id ? { ...a, status } : a
+            );
+            saveData('absences', absences);
+            // Re-render the view to update the list
+            renderView('Absences');
+            // Re-initialize calendar if planning view is active
+            if (calendarInstance) {
+                calendarInstance.setOption('events', getPlanningEvents());
+            }
+        };
+
+        const handleSubmitRequest = (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const type = form.type.value;
+            const start = form.start.value;
+            const end = form.end.value;
+            const reason = form.reason.value;
+
+            const currentUser = loadData('currentUser');
+            if (!currentUser) return;
+
+            const newRequest = {
+                id: 'a' + Date.now(),
+                userId: currentUser.id,
+                userName: `${currentUser.firstName} ${currentUser.lastName} (${currentUser.department})`,
+                type: type,
+                start: moment(start).startOf('day').toDate(),
+                end: moment(end).startOf('day').toDate(),
+                status: 'En attente',
+                reason: reason,
+            };
+
+            const absences = getAbsences();
+            saveData('absences', [...absences, newRequest]);
+            closeModal('new-absence-modal');
+            renderView('Absences'); // Re-render to show new request
+        };
+
+        const renderDemandesAbsenceView = () => {
+            const absences = getAbsences();
+            const isAdmin = currentUser.role === 'Administrateur';
+
+            const pendingAbsences = absences.filter(a => a.status === 'En attente');
+            const allAbsences = absences.filter(a => a.status !== 'En attente')
+                                        .sort((a, b) => new Date(b.start) - new Date(a.start)); // Newest first
+
+            const pendingHtml = pendingAbsences.length > 0 ? pendingAbsences.map(absence => `
+                <div class="bg-white p-6 rounded-xl shadow-md flex items-center justify-between border border-yellow-300">
+                    <div>
+                        <p class="font-semibold text-gray-900">${absence.userName}</p>
+                        <p class="text-sm text-gray-600 mt-1">
+                            <span class="font-medium">${absence.type}</span> | Période: <span class="font-mono">${formatDateRange(absence.start, absence.end)}</span>
+                        </p>
+                        ${absence.reason ? `<p class="text-xs text-gray-500 italic mt-1">Raison: ${absence.reason}</p>` : ''}
+                    </div>
+                    <div class="flex space-x-2">
+                        <button
+                            onclick="handleValidation('${absence.id}', 'Approuvé')"
+                            class="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition duration-150"
+                            title="Approuver"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <button
+                            onclick="handleValidation('${absence.id}', 'Refusé')"
+                            class="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition duration-150"
+                            title="Refuser"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('') : '<p class="text-gray-500 italic p-4 bg-white rounded-xl shadow-md">Aucune demande en attente de validation.</p>';
+
+            const historyHtml = allAbsences.length > 0 ? allAbsences.map(absence => `
+                <li class="flex justify-between items-center border-b pb-3 last:border-b-0 last:pb-0">
+                    <div class="text-gray-700">
+                        <span class="font-semibold">${absence.userName}</span> - ${absence.type} (${formatDateRange(absence.start, absence.end)})
+                    </div>
+                    <span class="px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(absence.status)}">
+                        ${absence.status}
+                    </span>
+                </li>
+            `).join('') : '<p class="text-gray-500 italic">Aucune absence validée ou refusée.</p>';
+
+            return `
+                <div class="p-8 bg-gray-50 min-h-full">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-900">Demandes d'Absence</h1>
+                        ${!isAdmin ? `
+                            <button
+                                onclick="openModal('new-absence-modal')"
+                                class="flex items-center px-4 py-2 bg-indigo-600 text-white font-medium rounded-xl shadow-md hover:bg-indigo-700 transition duration-150"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                                </svg>
+                                Nouvelle Demande
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    ${isAdmin ? `
+                        <div class="mb-8">
+                            <h2 class="text-xl font-semibold text-gray-800 mb-4">Validation des Demandes (En Attente)</h2>
+                            <div class="space-y-4">
+                                ${pendingHtml}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Historique des Absences</h2>
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <ul class="space-y-4">
+                            ${historyHtml}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        };
+
+        // --- INITIALIZATION ---
+
+        window.onload = () => {
+            currentUser = loadData('currentUser', null);
+            if (currentUser) {
+                renderMainLayout();
+            } else {
+                renderLoginPage();
+            }
+        };
+    </script>
+</body>
+</html>
